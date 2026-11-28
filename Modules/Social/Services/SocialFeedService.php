@@ -52,7 +52,9 @@ class SocialFeedService
             $limit
         );
 
-        $rows = Cache::remember($cacheKey, now()->addSeconds((int)config('social.cache_ttl_seconds', 45)), function () use ($locationId, $postType, $cursor, $limit) {
+        $settings = SocialSettingsService::get();
+        $ttl = max(0, (int)($settings['cache_ttl_seconds'] ?? config('social.cache_ttl_seconds', 45)));
+        $rows = Cache::remember($cacheKey, now()->addSeconds($ttl), function () use ($locationId, $postType, $cursor, $limit) {
             $query = SocialPost::query()
                 ->with(['media', 'sharedPost'])
                 ->where('status', 'published')
@@ -616,7 +618,7 @@ class SocialFeedService
                 'sort_order' => $idx,
             ]);
 
-            if ($isVideo) {
+            if ($isVideo && !empty(SocialSettingsService::get()['allow_video_transcode'])) {
                 try {
                     $pending = TranscodeFeedVideoJob::dispatch((int)$media->id, (string)$url);
                     if (config('queue.default') === 'sync') {

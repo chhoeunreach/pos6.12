@@ -6,16 +6,28 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\Social\Services\SocialFeedService;
+use Modules\Social\Services\SocialSettingsService;
 
 class SocialFeedController extends Controller
 {
     public function __construct(
         protected SocialFeedService $feed,
     ) {
+        $this->middleware(function ($request, $next) {
+            $settings = SocialSettingsService::get();
+            if (empty($settings['api_enabled'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Social Platform API is currently disabled by administrator.',
+                ], 503);
+            }
+            return $next($request);
+        })->except(['health']);
     }
 
     public function health()
     {
+        $settings = SocialSettingsService::get();
         $connected = false;
         $tablesReady = false;
         $database = null;
@@ -34,6 +46,7 @@ class SocialFeedController extends Controller
                 'social_follows',
                 'social_reports',
                 'social_user_blocks',
+                'social_settings',
             ])->every(fn (string $table) => $schema->hasTable($table));
         } catch (\Throwable $e) {
             $connected = false;
@@ -46,10 +59,15 @@ class SocialFeedController extends Controller
         }
 
         return response()->json([
-            'success' => $ready,
+            'success' => $ready && !empty($settings['api_enabled']),
             'message' => $message,
             'data' => [
                 'module' => 'Social',
+                'platform_name' => $settings['platform_name'],
+                'mode' => $settings['mode'],
+                'api_enabled' => (bool)$settings['api_enabled'],
+                'public_feed_enabled' => (bool)$settings['public_feed_enabled'],
+                'customer_posting_enabled' => (bool)$settings['customer_posting_enabled'],
                 'connection' => 'mysql_feed',
                 'database' => $database,
                 'connected' => $connected,
@@ -66,10 +84,16 @@ class SocialFeedController extends Controller
 
     public function publicIndex(Request $request)
     {
+        $settings = SocialSettingsService::get();
+        if (empty($settings['public_feed_enabled'])) {
+            abort(403, 'Public Social Feed is disabled in Admin Social Panel.');
+        }
+
         $locationId = $request->query('location_id') ? (int)$request->query('location_id') : null;
         $postType = $request->query('post_type') ? (string)$request->query('post_type') : null;
         $cursor = $request->query('cursor') ? (int)$request->query('cursor') : null;
-        $limit = (int)$request->query('limit', $request->query('per_page', 15));
+        $defaultLimit = (int)($settings['per_page_limit'] ?? 15);
+        $limit = (int)$request->query('limit', $request->query('per_page', $defaultLimit));
         $customerId = $this->resolveCustomerId($request);
 
         $result = $this->feed->listPublicFeed($locationId, $postType, $customerId, $cursor, $limit);
@@ -81,12 +105,19 @@ class SocialFeedController extends Controller
             'meta' => [
                 'next_cursor' => $result['next_cursor'],
                 'has_more' => $result['has_more'],
+                'mode' => $settings['mode'],
+                'platform_name' => $settings['platform_name'],
             ],
         ]);
     }
 
     public function publicShow(Request $request, $post)
     {
+        $settings = SocialSettingsService::get();
+        if (empty($settings['public_feed_enabled'])) {
+            abort(403, 'Public Social Feed is disabled in Admin Social Panel.');
+        }
+
         $customerId = $this->resolveCustomerId($request);
         $item = $this->feed->showPublicPost((int)$post, $customerId);
 
@@ -120,6 +151,11 @@ class SocialFeedController extends Controller
 
     public function customerStore(Request $request)
     {
+        $settings = SocialSettingsService::get();
+        if (empty($settings['customer_posting_enabled'])) {
+            abort(403, 'Customer posting is disabled in Admin Social Panel.');
+        }
+
         $validated = $request->validate([
             'location_id' => ['nullable', 'integer', 'min:1'],
             'location_name' => ['nullable', 'string', 'max:120'],
